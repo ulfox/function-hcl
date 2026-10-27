@@ -48,6 +48,7 @@ const (
 	blockArg         = functions.BlockArg
 	blockRequirement = "requirement"
 	blockSelect      = "select"
+	blockValidation  = "validation"
 
 	attrBody        = "body"
 	attrCondition   = "condition"
@@ -59,6 +60,7 @@ const (
 	attrKind        = "kind"
 	attrMatchName   = "matchName"
 	attrMatchLabels = "matchLabels"
+	attrErrMessage  = "error_message"
 
 	blockLabelStatus     = "status"
 	blockLabelConnection = "connection"
@@ -99,6 +101,7 @@ const (
 	discardTypeReady        DiscardType = "resource-ready"
 	discardTypeContext      DiscardType = "context"
 	discardTypeRequirement  DiscardType = "requirement"
+	discardTypeValidation   DiscardType = "validation"
 )
 
 // DiscardReason describes the reason for the elision.

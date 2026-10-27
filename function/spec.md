@@ -415,6 +415,26 @@ context  {
 
 ```
 
+## Validate the input
+
+A `validation` block fails the evaluation with its `error_message` when its `condition` is false. It can
+appear at the top level and in groups.
+
+```hcl
+validation {
+  condition     = length(try(req.composite.spec.parameters.subnets, [])) > 0
+  error_message = "subnets must list at least one subnet"
+}
+```
+
+* The condition is true: nothing happens.
+* The condition is false: the evaluation fails with `validation failed; <error_message>`, whether or not
+  the resources already exist.
+* The condition cannot be evaluated yet, for example because it reads the status of a resource that does
+  not exist yet: the block is skipped with a warning, like other incomplete values. A missing attribute is
+  also an evaluation error, so read optional inputs with `try` to have the condition evaluate to false.
+* The condition is not a bool, or the error message is not a string: the evaluation fails.
+
 ## Set requirements in the response for extra resources
 
 You can ask for extra resources that crossplane will supply when requested. 
@@ -631,6 +651,7 @@ The following are treated as errors:
 * Circular references in locals expressions (e.g. `locals{ a = b, b = a}`)
 * Two resources are produced with the same crossplane name
 * A condition value is incomplete
+* The condition of a `validation` block is false
 * A resource that is available in the observed state has become incomplete
 * A non-object composite status value or a connection value is produced from two places, and they have different values
 * A requirement block defines both `matchName` and `matchLabels` or does not specify either.
