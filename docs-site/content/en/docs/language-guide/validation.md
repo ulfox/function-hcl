@@ -31,3 +31,5 @@ A condition that reads a missing attribute cannot be evaluated, so it is skipped
 optional inputs with `try`, as in the example above, so that a missing value makes the condition false.
 
 A `validation` block inside a group whose `condition` is false is not evaluated.
+
+The language server completes the block and its two attributes and shows their descriptions on hover.
