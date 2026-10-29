@@ -55,7 +55,7 @@ func (e *Evaluator) processGroup(ctx *hcl.EvalContext, content *hcl.BodyContent)
 		case blockRequirement:
 			curDiags = e.processRequirement(ctx, b)
 		case blockValidation:
-			curDiags = e.processValidation(ctx, b)
+			// already processed by processValidations
 		case blockLocals:
 			// already processed
 		case blockFunction:

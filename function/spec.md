@@ -433,7 +433,16 @@ validation {
 * The condition cannot be evaluated yet, for example because it reads the status of a resource that does
   not exist yet: the block is skipped with a warning, like other incomplete values. A missing attribute is
   also an evaluation error, so read optional inputs with `try` to have the condition evaluate to false.
-* The condition is not a bool, or the error message is not a string: the evaluation fails.
+* The condition or the error message has a known type other than bool and string: the evaluation fails,
+  whatever the condition's value.
+* The condition is false and the error message cannot be built: the evaluation fails with
+  `validation failed; error_message could not be evaluated: ...`. When the condition is true the message is
+  not needed, so it can read values that exist only when the input is invalid.
+
+Validation blocks run before every other block, at the top level and in every group whose condition is
+true, wherever they appear in the source. A failing rule is therefore reported even when a resource that
+reads the same input fails to evaluate. When several rules fail, only the first in source order is
+reported.
 
 ## Set requirements in the response for extra resources
 
