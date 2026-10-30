@@ -442,7 +442,9 @@ validation {
 Validation blocks run before every other block, at the top level and in every group whose condition is
 true, wherever they appear in the source. A failing rule is therefore reported even when a resource that
 reads the same input fails to evaluate. When several rules fail, only the first in source order is
-reported.
+reported. A group condition that calls `timestamp()` or `uuid()` can change between this first pass and
+the render; when it becomes true, the group's validation blocks run in source order with its other
+blocks, so the group never renders without them.
 
 ## Set requirements in the response for extra resources
 

@@ -53,5 +53,8 @@ true, wherever they appear in the source. A rule that fails is reported even whe
 the same input fails to evaluate. When several rules fail, only the first one in source order is reported.
 
 A `validation` block inside a group whose `condition` is false, or not known yet, is not evaluated.
+A group condition that calls `timestamp()` or `uuid()` can change between this first pass and the
+render. When it becomes true, the group's validation blocks run in source order with its other blocks,
+so the group never renders without them.
 
 The language server completes the block and its two attributes and shows their descriptions on hover.

@@ -160,6 +160,7 @@ type Evaluator struct {
 	contexts                 []Object                          // desired context values
 	ready                    map[string]int32                  // readiness indicator for resource
 	discards                 []DiscardItem                     // list of things discarded from output
+	validated                map[hcl.Range]bool                // validation blocks evaluated, keyed by definition range
 }
 
 // New creates an evaluator.
@@ -178,6 +179,7 @@ func New(opts Options) (*Evaluator, error) {
 		desiredResources: map[string]*structpb.Struct{},
 		requirements:     map[string]*fnv1.ResourceSelector{},
 		ready:            map[string]int32{},
+		validated:        map[hcl.Range]bool{},
 	}, nil
 }
 

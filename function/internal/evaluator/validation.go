@@ -72,6 +72,7 @@ func hasValidation(content *hcl.BodyContent) bool {
 // message may read values that exist only when the input is invalid, so a message that can't be
 // evaluated is an error only when the condition is false.
 func (e *Evaluator) processValidation(ctx *hcl.EvalContext, block *hcl.Block) hcl.Diagnostics {
+	e.validated[block.DefRange] = true
 	content, diags := block.Body.Content(validationSchema())
 	if diags.HasErrors() {
 		return diags
