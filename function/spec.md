@@ -434,7 +434,7 @@ validation {
   not exist yet: the block is skipped with a warning, like other incomplete values. A missing attribute is
   also an evaluation error, so read optional inputs with `try` to have the condition evaluate to false.
 * The condition or the error message has a known type other than bool and string: the evaluation fails,
-  whatever the condition's value.
+  whatever the condition's value, even when part of the value is not known yet or fails to evaluate.
 * The condition is false and the error message cannot be built: the evaluation fails with
   `validation failed; error_message could not be evaluated: ...`. When the condition is true the message is
   not needed, so it can read values that exist only when the input is invalid.

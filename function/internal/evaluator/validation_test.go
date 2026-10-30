@@ -114,6 +114,38 @@ func TestValidation(t *testing.T) {
 			errSubstr: "validation condition must be a bool; got tuple",
 		},
 		{
+			name: "condition not a bool, with an evaluation error",
+			hcl: `
+				validation {
+				  condition     = [req.resource["primary-bucket"].status.atProvider.arn]
+				  error_message = "never shown"
+				}
+			` + validationBucket,
+			fn:        noObservedResources,
+			errSubstr: "validation condition must be a bool; got tuple",
+		},
+		{
+			name: "condition true, error_message not a string, with an evaluation error",
+			hcl: `
+				validation {
+				  condition     = true
+				  error_message = [req.composite.spec.parameters.missing]
+				}
+			` + validationBucket,
+			errSubstr: "validation error_message must be a string; got tuple",
+		},
+		{
+			name: "condition not known yet, error_message not a string",
+			hcl: `
+				validation {
+				  condition     = req.resource["primary-bucket"].status.atProvider.arn != ""
+				  error_message = 123
+				}
+			` + validationBucket,
+			fn:        noObservedResources,
+			errSubstr: "validation error_message must be a string; got number",
+		},
+		{
 			name: "condition true, error_message not a string",
 			hcl: `
 				validation {

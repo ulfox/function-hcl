@@ -11,9 +11,14 @@ import (
 // processValidations evaluates the validation blocks at the top level and in every group whose
 // condition is true, before any other block. Other blocks stop the evaluation at their first error,
 // so a resource that reads the invalid input would otherwise fail with its own expression error and
-// hide the message of the rule that the input breaks. Errors in locals and group conditions are left
-// to processGroup, which reports them and records the discarded groups.
+// hide the message of the rule that the input breaks. Groups without validation blocks are skipped
+// before their locals are evaluated, so a composition without them evaluates its locals only once.
+// Errors in locals and group conditions are left to processGroup, which reports them and records
+// the discarded groups.
 func (e *Evaluator) processValidations(ctx *hcl.EvalContext, content *hcl.BodyContent) hcl.Diagnostics {
+	if !hasValidation(content) {
+		return nil
+	}
 	ctx, ds := e.processLocals(ctx, content)
 	if ds.HasErrors() {
 		return nil
@@ -32,11 +37,9 @@ func (e *Evaluator) processValidations(ctx *hcl.EvalContext, content *hcl.BodyCo
 		case blockValidation:
 			curDiags = e.processValidation(ctx, b)
 		case blockGroup:
-			groupContent, ds := b.Body.Content(groupSchema())
-			if ds.HasErrors() {
-				continue
+			if groupContent, ds := b.Body.Content(groupSchema()); !ds.HasErrors() {
+				curDiags = e.processValidations(ctx, groupContent)
 			}
-			curDiags = e.processValidations(ctx, groupContent)
 		}
 		diags = diags.Extend(curDiags)
 		if curDiags.HasErrors() {
@@ -46,11 +49,28 @@ func (e *Evaluator) processValidations(ctx *hcl.EvalContext, content *hcl.BodyCo
 	return diags
 }
 
+// hasValidation reports whether content or one of its groups has a validation block.
+func hasValidation(content *hcl.BodyContent) bool {
+	for _, b := range content.Blocks {
+		switch b.Type {
+		case blockValidation:
+			return true
+		case blockGroup:
+			if groupContent, ds := b.Body.Content(groupSchema()); !ds.HasErrors() && hasValidation(groupContent) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // processValidation fails the evaluation with the block's error message when its condition is
 // known to be false. A condition that can't be evaluated yet is skipped with a warning, like any
 // other incomplete value, because the same kind of error also means a dependency isn't ready yet.
 // A condition or message whose type is known to be wrong fails the evaluation whatever the
-// condition's value, so a broken block is reported before the input it checks is invalid.
+// condition's value, so a broken block is reported before the input it checks is invalid. The
+// message may read values that exist only when the input is invalid, so a message that can't be
+// evaluated is an error only when the condition is false.
 func (e *Evaluator) processValidation(ctx *hcl.EvalContext, block *hcl.Block) hcl.Diagnostics {
 	content, diags := block.Body.Content(validationSchema())
 	if diags.HasErrors() {
@@ -58,17 +78,16 @@ func (e *Evaluator) processValidation(ctx *hcl.EvalContext, block *hcl.Block) hc
 	}
 
 	condExpr := content.Attributes[attrCondition].Expr
-	cond, ds := condExpr.Value(ctx)
-	if !ds.HasErrors() && hasWrongType(cond, cty.Bool) {
-		return diags.Extend(ds).Append(&hcl.Diagnostic{
-			Severity: hcl.DiagError,
-			Summary:  "validation condition must be a bool",
-			Detail:   "got " + cond.Type().FriendlyName(),
-			Subject:  ptr(condExpr.Range()),
-		})
-	}
-	if ds.HasErrors() || !cond.IsWhollyKnown() {
-		context := e.messagesFromDiags(ds)
+	msgExpr := content.Attributes[attrErrMessage].Expr
+	cond, condDiags := condExpr.Value(ctx)
+	msg, msgDiags := msgExpr.Value(ctx)
+	switch {
+	case hasWrongType(cond, cty.Bool):
+		return diags.Append(validationError("validation condition must be a bool", "got "+cond.Type().FriendlyName(), condExpr))
+	case hasWrongType(msg, cty.String):
+		return diags.Append(validationError("validation error_message must be a string", "got "+msg.Type().FriendlyName(), msgExpr))
+	case condDiags.HasErrors() || !cond.IsWhollyKnown():
+		context := e.messagesFromDiags(condDiags)
 		if len(context) == 0 {
 			context = []string{"the condition is not known yet"}
 		}
@@ -79,57 +98,34 @@ func (e *Evaluator) processValidation(ctx *hcl.EvalContext, block *hcl.Block) hc
 			SourceRange: condExpr.Range().String(),
 			Context:     context,
 		})
-		return diags.Extend(hclutils.DowngradeDiags(ds))
-	}
-	diags = diags.Extend(ds)
-	if cond.IsNull() {
-		return diags.Append(&hcl.Diagnostic{
-			Severity: hcl.DiagError,
-			Summary:  "validation condition must be a bool",
-			Detail:   "got null",
-			Subject:  ptr(condExpr.Range()),
-		})
-	}
-
-	// the message may interpolate values that only exist when the input is invalid, so a message
-	// that can't be evaluated is an error only when the condition is false
-	msgExpr := content.Attributes[attrErrMessage].Expr
-	msg, msgDiags := msgExpr.Value(ctx)
-	if !msgDiags.HasErrors() && hasWrongType(msg, cty.String) {
-		return diags.Append(&hcl.Diagnostic{
-			Severity: hcl.DiagError,
-			Summary:  "validation error_message must be a string",
-			Detail:   "got " + msg.Type().FriendlyName(),
-			Subject:  ptr(msgExpr.Range()),
-		})
-	}
-	if cond.True() {
+		return diags.Extend(hclutils.DowngradeDiags(condDiags))
+	case cond.IsNull():
+		return diags.Append(validationError("validation condition must be a bool", "got null", condExpr))
+	case cond.True():
 		return diags
 	}
 
 	// the input is known to be invalid, so the evaluation fails as a validation failure even when
 	// the message itself can't be built
-	var detail string
+	detail := "error_message is not known yet"
 	switch {
 	case msgDiags.HasErrors():
 		detail = "error_message could not be evaluated: " + strings.Join(e.messagesFromDiags(msgDiags), "; ")
-	case !msg.IsWhollyKnown():
-		detail = "error_message is not known yet"
-	case msg.IsNull():
+	case msg.IsWhollyKnown() && msg.IsNull():
 		detail = "error_message is null"
-	default:
+	case msg.IsWhollyKnown():
 		detail = msg.AsString()
 	}
-	return diags.Append(&hcl.Diagnostic{
-		Severity: hcl.DiagError,
-		Summary:  "validation failed",
-		Detail:   detail,
-		Subject:  ptr(condExpr.Range()),
-	})
+	return diags.Append(validationError("validation failed", detail, condExpr))
 }
 
-// hasWrongType reports whether v's type is known and is not want. A value whose type is not known
-// yet, such as an unknown or a null without a type, can still turn out to be of the right type.
+func validationError(summary, detail string, expr hcl.Expression) *hcl.Diagnostic {
+	return &hcl.Diagnostic{Severity: hcl.DiagError, Summary: summary, Detail: detail, Subject: ptr(expr.Range())}
+}
+
+// hasWrongType reports whether v's type is known and is not want, even when v is not known or its
+// evaluation had errors. A value whose type is not known yet can still be of the right type.
 func hasWrongType(v cty.Value, want cty.Type) bool {
-	return v.Type() != want && v.Type() != cty.DynamicPseudoType
+	t := v.Type()
+	return t != want && t != cty.DynamicPseudoType && t != cty.NilType
 }

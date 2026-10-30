@@ -25,7 +25,7 @@ validation {
 | `true` | Nothing happens. |
 | `false` | The evaluation fails with `validation failed; <error_message>`, whether or not the resources already exist. |
 | Cannot be evaluated yet | The block is skipped with a warning, like other incomplete values. |
-| A known type other than bool, even if part of the value is not known yet | The evaluation fails. |
+| A known type other than bool, even if part of the value is not known yet or fails to evaluate | The evaluation fails. |
 
 A condition that reads a missing attribute cannot be evaluated, so it is skipped rather than failed. Read
 optional inputs with `try`, as in the example above, so that a missing value makes the condition false.
